@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useRouter,
   HeadContent,
   Scripts,
@@ -10,8 +9,9 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import interFontUrl from "../assets/fonts/inter-latin-var.woff2?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { Toaster } from "../components/ui/sonner";
+import { THEME_COLORS } from "../hooks/use-theme";
 import { CustomCursor } from "../components/portfolio/CustomCursor";
 
 function NotFoundComponent() {
@@ -74,47 +74,52 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-const themeInitScript = `try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}`;
+// Runs in <head> before the page paints:
+// 1. applies the saved/system theme (and matching browser bar colour) so there is no flash;
+// 2. shows the intro only on the first visit of a browser session (.intro-skip hides it).
+// It must stay after the theme-color <meta>, which TanStack renders before scripts.
+const headInitScript = `(function(){var r=document.documentElement;try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)r.classList.add('dark');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',d?'${THEME_COLORS.dark}':'${THEME_COLORS.light}');}catch(e){}try{if(sessionStorage.getItem('intro-seen'))r.classList.add('intro-skip');else sessionStorage.setItem('intro-seen','1');}catch(e){}})();`;
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+const TITLE = "Jeswin P U — AI Software Engineer & Developer";
+const SHARE_DESCRIPTION =
+  "Python backend development, AI/LLM integration, full-stack apps, and data analytics with FastAPI, SQLAlchemy, React, TypeScript, and PostgreSQL.";
+
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Jeswin P U — Python Odoo Developer" },
+      { title: TITLE },
       {
         name: "description",
         content:
-          "Portfolio of Jeswin P U — Python Odoo Developer from Kerala, India specializing in ERP development, business automation, and data analytics.",
+          "Portfolio of Jeswin P U — AI Software Engineer and Developer from Kerala, India, building Python backends, full-stack React + TypeScript apps, and AI/LLM-powered workflows.",
       },
       { name: "author", content: "Jeswin P U" },
-      { property: "og:title", content: "Jeswin P U — Python Odoo Developer" },
-      {
-        property: "og:description",
-        content:
-          "ERP development, business automation, and data analytics with Python, Odoo, PostgreSQL, and modern web tech.",
-      },
+      // One tag only (TanStack keeps one meta per name); the head script sets the
+      // dark colour when needed, and use-theme.ts updates it when the theme is toggled.
+      { name: "theme-color", content: THEME_COLORS.light },
+      { property: "og:title", content: TITLE },
+      { property: "og:description", content: SHARE_DESCRIPTION },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "Jeswin P U" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Jeswin P U — Python Odoo Developer" },
-      {
-        name: "twitter:description",
-        content:
-          "ERP development, business automation, and data analytics with Python, Odoo, PostgreSQL, and modern web tech.",
-      },
+      { name: "twitter:title", content: TITLE },
+      { name: "twitter:description", content: SHARE_DESCRIPTION },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+        rel: "preload",
+        href: interFontUrl,
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
       },
+      { rel: "icon", href: "/favicon.ico", sizes: "16x16 32x32 48x48", type: "image/x-icon" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
-    scripts: [{ children: themeInitScript }],
+    scripts: [{ children: headInitScript }],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -124,7 +129,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // The head script adds classes (theme, intro) to <html> before React hydrates.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -137,13 +143,10 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <CustomCursor />
       <Outlet />
-      <Toaster position="top-right" />
-    </QueryClientProvider>
+    </>
   );
 }
